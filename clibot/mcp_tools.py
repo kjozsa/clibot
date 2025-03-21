@@ -61,47 +61,21 @@ class MCPToolsManager:
         
         # Create a new session for each operation
         try:
-            if self.config.verbose:
-                ui.print_verbose(f"Opening stdio client for server: {server_name}")
-            
             async with stdio_client(server_params) as (read, write):
-                if self.config.verbose:
-                    ui.print_verbose(f"Creating client session for server: {server_name}")
-                
                 async with ClientSession(read, write) as session:
                     # Initialize the session
-                    if self.config.verbose:
-                        ui.print_verbose(f"Initializing session for server: {server_name}")
-                    
                     await session.initialize()
                     
-                    if self.config.verbose:
-                        ui.print_verbose(f"Session initialized for server: {server_name}")
-                    
                     # Execute the operation
-                    if self.config.verbose:
-                        ui.print_verbose(f"Executing operation for server: {server_name}")
-                    
                     result = await operation(session)
-                    
-                    if self.config.verbose:
-                        ui.print_verbose(f"Operation executed for server: {server_name}")
-                        ui.print_verbose(f"Result type: {type(result)}")
-                        if isinstance(result, tuple):
-                            ui.print_verbose(f"Tuple length: {len(result)}")
-                            for i, item in enumerate(result):
-                                ui.print_verbose(f"Item {i} type: {type(item)}")
-                        elif isinstance(result, dict):
-                            ui.print_verbose(f"Dict keys: {result.keys()}")
-                        elif isinstance(result, list):
-                            ui.print_verbose(f"List length: {len(result)}")
-                    
                     return result
         except Exception as e:
             if self.config.verbose:
                 ui.print_verbose(f"Error in _execute_with_session for server {server_name}: {str(e)}")
                 import traceback
-                ui.print_verbose(f"Traceback: {traceback.format_exc()}")
+                ui.print_verbose(
+                    f"Traceback: {traceback.format_exc()}"
+                )
             raise
     
     def execute_mcp_command(
@@ -156,55 +130,32 @@ class MCPToolsManager:
         try:
             # Define the async operation
             async def operation(session):
-                if self.config.verbose:
-                    ui.print_verbose(f"Calling list_tools for server: {server_name}")
-                
-                tools_data = await session.list_tools()
-                
-                if self.config.verbose:
-                    ui.print_verbose(f"list_tools returned type: {type(tools_data)}")
-                
-                return tools_data
+                return await session.list_tools()
             
             # Run the async operation in a new event loop
-            if self.config.verbose:
-                ui.print_verbose(f"Running async operation for server: {server_name}")
-            
             tools_data = self._run_async(self._execute_with_session(server_name, operation))
-            
-            if self.config.verbose:
-                ui.print_verbose(f"Async operation completed for server: {server_name}")
-                ui.print_verbose(f"Result type: {type(tools_data)}")
             
             # Extract tool names, handling different data structures
             tool_names = []
             
             # Handle ListToolsResult type (from MCP SDK)
             if hasattr(tools_data, "tools") and isinstance(tools_data.tools, list):
-                if self.config.verbose:
-                    ui.print_verbose(f"Processing ListToolsResult with {len(tools_data.tools)} tools")
                 tool_names = [tool.name for tool in tools_data.tools if hasattr(tool, "name")]
             # Handle tuple type
             elif isinstance(tools_data, tuple) and len(tools_data) > 0:
                 first_item = tools_data[0]
-                if self.config.verbose:
-                    ui.print_verbose(f"Processing tuple result with {len(tools_data)} items")
-                    ui.print_verbose(f"First item type: {type(first_item)}")
-                
                 if isinstance(first_item, list):
                     tool_names = [tool.get("name") for tool in first_item if tool.get("name")]
                 elif hasattr(first_item, "tools") and isinstance(first_item.tools, list):
                     tool_names = [tool.name for tool in first_item.tools if hasattr(tool, "name")]
             # Handle list type
             elif isinstance(tools_data, list):
-                if self.config.verbose:
-                    ui.print_verbose(f"Processing list result with {len(tools_data)} items")
                 tool_names = [tool.get("name") for tool in tools_data if tool.get("name")]
             # Handle dictionary type
             elif isinstance(tools_data, dict) and "tools" in tools_data:
-                if self.config.verbose:
-                    ui.print_verbose(f"Processing dict result with 'tools' key containing {len(tools_data['tools'])} items")
-                tool_names = [tool.get("name") for tool in tools_data["tools"] if tool.get("name")]
+                tool_names = [
+                    tool.get("name") for tool in tools_data["tools"] if tool.get("name")
+                ]
             
             if self.config.verbose:
                 msg = "Retrieved %i tools for server: %s" % (
@@ -220,8 +171,6 @@ class MCPToolsManager:
                     server_name, str(e)
                 )
                 ui.print_verbose(msg)
-                import traceback
-                ui.print_verbose(f"Traceback: {traceback.format_exc()}")
             
             # Fall back to config-based tools
             return self._get_config_tools(server_name)
@@ -258,8 +207,12 @@ class MCPToolsManager:
                             # Convert tool object to dictionary
                             return {
                                 "name": tool.name,
-                                "description": tool.description if hasattr(tool, "description") else "",
-                                "parameters": tool.parameters if hasattr(tool, "parameters") else {}
+                                "description": (
+                                    tool.description if hasattr(tool, "description") else ""
+                                ),
+                                "parameters": (
+                                    tool.parameters if hasattr(tool, "parameters") else {}
+                                )
                             }
                 
                 # Handle other types as before
@@ -312,13 +265,12 @@ class MCPToolsManager:
             
             # Handle ListToolsResult type (from MCP SDK)
             if hasattr(tools_data, "tools") and isinstance(tools_data.tools, list):
-                if self.config.verbose:
-                    ui.print_verbose(f"Processing ListToolsResult with {len(tools_data.tools)} tools")
-                
                 for tool in tools_data.tools:
                     if hasattr(tool, "name"):
                         name = tool.name
-                        description = tool.description if hasattr(tool, "description") else f"{name} tool"
+                        description = (
+                            tool.description if hasattr(tool, "description") else f"{name} tool"
+                        )
                         descriptions[name] = description
             # Handle other types as before
             else:
@@ -343,7 +295,9 @@ class MCPToolsManager:
                             descriptions[name] = description
                     elif hasattr(tool, "name"):
                         name = tool.name
-                        description = tool.description if hasattr(tool, "description") else f"{name} tool"
+                        description = (
+                            tool.description if hasattr(tool, "description") else f"{name} tool"
+                        )
                         descriptions[name] = description
             
             if self.config.verbose:
