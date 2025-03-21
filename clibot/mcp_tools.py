@@ -1,10 +1,11 @@
 """MCP tools integration for CliBot."""
 
-import subprocess
 import json
 import os
-from typing import Dict, List, Any, Optional
-from .config import Config, MCPServer
+import subprocess
+from typing import Any, Dict, List
+
+from .config import Config
 
 class MCPToolsManager:
     """Manager for MCP tools execution."""
@@ -47,15 +48,5 @@ class MCPToolsManager:
     
     def list_available_tools(self, server_name: str) -> List[str]:
         """List available tools for a specific MCP server."""
-        # This implementation depends on how MCP tools expose their capabilities
-        # For now, return predefined lists based on server type
-        server_tools = {
-            "jenkins-mcp-build": ["list_jobs", "get_build_status", "trigger_build"],
-            "jenkins-mcp-deploy": ["list_jobs", "get_build_status", "trigger_build"],
-            "git-mcp": ["list_repositories", "get_last_git_tag", "list_commits_since_last_tag", 
-                        "create_git_tag", "push_git_tag", "refresh_repository"],
-            "mcp-atlassian": ["jira_search", "jira_get_issue", "jira_create_issue", 
-                             "jira_update_issue", "confluence_search", "confluence_get_page"]
-        }
-        
-        return server_tools.get(server_name, [])
+        # Get tools from the config file
+        return self.config.get_mcp_server_tools(server_name)

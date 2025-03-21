@@ -16,6 +16,7 @@ class MCPServer(BaseModel):
     command: str
     args: List[str]
     env: Dict[str, str]
+    tools: Optional[List[str]] = None
 
 class MCPConfig(BaseModel):
     """MCP configuration structure."""
@@ -42,11 +43,11 @@ class Config:
         if config_path:
             path = Path(config_path)
         else:
-            # Try standard locations
+            # Try standard locations, prioritizing local mcp_config.json
             locations = [
-                Path.home() / ".codeium/windsurf-next/mcp_config.json",
+                Path.cwd() / "mcp_config.json",  # Local directory first
                 Path.home() / ".config/clibot/mcp_config.json",
-                Path.cwd() / "mcp_config.json"
+                Path.home() / ".codeium/windsurf-next/mcp_config.json"
             ]
             
             for loc in locations:
@@ -69,3 +70,10 @@ class Config:
     def list_mcp_servers(self) -> List[str]:
         """List available MCP servers."""
         return list(self.mcp_config.mcpServers.keys())
+    
+    def get_mcp_server_tools(self, server_name: str) -> List[str]:
+        """Get available tools for a specific MCP server."""
+        server = self.get_mcp_server(server_name)
+        if not server:
+            return []
+        return server.tools or []

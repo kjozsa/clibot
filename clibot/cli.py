@@ -2,17 +2,20 @@
 
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import typer
 
+from . import ui
+from .ai_service import AIService
 from .config import Config
 from .mcp_tools import MCPToolsManager
-from .ai_service import AIService
-from . import ui
 
-app = typer.Typer(help="CliBot - AI Assistant with MCP Tools")
-mcp_app = typer.Typer(help="Execute MCP tools")
+# Configure context settings to add -h as a shortcut for --help
+CONTEXT_SETTINGS: Dict[str, bool] = {"help_option_names": ["--help", "-h"]}
+
+app = typer.Typer(help="CliBot - AI Assistant with MCP Tools", context_settings=CONTEXT_SETTINGS)
+mcp_app = typer.Typer(help="Execute MCP tools", context_settings=CONTEXT_SETTINGS)
 app.add_typer(mcp_app, name="mcp")
 
 # Global instances
@@ -21,7 +24,12 @@ mcp_manager = None
 ai_service = None
 
 # Define common options
-CONFIG_OPTION = typer.Option(None, "--config", "-c", help="Path to MCP config file")
+CONFIG_OPTION = typer.Option(
+    "./mcp_config.json", 
+    "--config", 
+    "-c", 
+    help="Path to MCP config file"
+)
 VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 
 # Define common arguments
