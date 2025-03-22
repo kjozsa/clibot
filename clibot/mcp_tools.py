@@ -38,11 +38,97 @@ class MCPToolsManager:
     def _preload_server_tools(self, server_name: str) -> None:
         """Preload tools and descriptions for a server to avoid redundant initializations."""
         try:
-            # Only load if not already in cache
-            if server_name not in self._tools_cache:
-                self.list_available_tools(server_name)
-            if server_name not in self._descriptions_cache:
-                self.get_tool_descriptions(server_name)
+            # Define a combined operation that gets both tools and descriptions in one session
+            async def combined_operation(session):
+                # Get tools list
+                tools_data = await session.list_tools()
+                
+                # Extract tool names
+                tool_names = []
+                
+                # Handle ListToolsResult type (from MCP SDK)
+                if hasattr(tools_data, "tools") and isinstance(tools_data.tools, list):
+                    tool_names = [tool.name for tool in tools_data.tools if hasattr(tool, "name")]
+                    
+                    # Also extract descriptions in the same operation
+                    descriptions = {}
+                    for tool in tools_data.tools:
+                        if hasattr(tool, "name"):
+                            name = tool.name
+                            description = (
+                                tool.description if hasattr(tool, "description") else f"{name} tool"
+                            )
+                            descriptions[name] = description
+                # Handle tuple type
+                elif isinstance(tools_data, tuple) and len(tools_data) > 0:
+                    first_item = tools_data[0]
+                    if isinstance(first_item, list):
+                        tool_names = [tool.get("name") for tool in first_item if tool.get("name")]
+                    elif hasattr(first_item, "tools") and isinstance(first_item.tools, list):
+                        tool_names = [tool.name for tool in first_item.tools if hasattr(tool, "name")]
+                # Handle list type
+                elif isinstance(tools_data, list):
+                    tool_names = [tool.get("name") for tool in tools_data if tool.get("name")]
+                # Handle dictionary type
+                elif isinstance(tools_data, dict) and "tools" in tools_data:
+                    tool_names = [
+                        tool.get("name") for tool in tools_data["tools"] if tool.get("name")
+                    ]
+                
+                # Extract descriptions if not already done
+                if not descriptions:
+                    descriptions = {}
+                    tools_list = []
+                    
+                    if isinstance(tools_data, list):
+                        tools_list = tools_data
+                    elif isinstance(tools_data, dict) and "tools" in tools_data:
+                        tools_list = tools_data["tools"]
+                    elif isinstance(tools_data, tuple) and len(tools_data) > 0:
+                        first_item = tools_data[0]
+                        if isinstance(first_item, list):
+                            tools_list = first_item
+                        elif hasattr(first_item, "tools"):
+                            tools_list = first_item.tools
+                    
+                    for tool in tools_list:
+                        if isinstance(tool, dict):
+                            name = tool.get("name")
+                            description = tool.get("description") or f"{name} tool"
+                            if name:
+                                descriptions[name] = description
+                        elif hasattr(tool, "name"):
+                            name = tool.name
+                            description = (
+                                tool.description if hasattr(tool, "description") else f"{name} tool"
+                            )
+                            descriptions[name] = description
+                
+                return {"tool_names": tool_names, "descriptions": descriptions}
+            
+            # Only run the combined operation if we need either tools or descriptions
+            if server_name not in self._tools_cache or server_name not in self._descriptions_cache:
+                # Run the async operation in a new event loop
+                result = self._run_async(self._execute_with_session(server_name, combined_operation))
+                
+                # Store results in cache
+                if server_name not in self._tools_cache:
+                    tool_names = result["tool_names"]
+                    if self.config.verbose:
+                        msg = "Retrieved %i tools for server: %s" % (
+                            len(tool_names), server_name
+                        )
+                        ui.print_verbose(msg)
+                    self._tools_cache[server_name] = tool_names
+                
+                if server_name not in self._descriptions_cache:
+                    descriptions = result["descriptions"]
+                    if self.config.verbose:
+                        msg = "Retrieved descriptions for %i tools on server: %s" % (
+                            len(descriptions), server_name
+                        )
+                        ui.print_verbose(msg)
+                    self._descriptions_cache[server_name] = descriptions
         except Exception as e:
             if self.config.verbose:
                 ui.print_verbose(f"Error pre-initializing tools for {server_name}: {str(e)}")
