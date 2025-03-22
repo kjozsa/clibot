@@ -43,7 +43,7 @@ def initialize(config_path: Optional[str] = None, verbose: bool = False):
     global config, mcp_manager, ai_service
     config = Config(config_path, verbose=verbose)
     mcp_manager = MCPToolsManager(config)
-    ai_service = AIService(config)
+    ai_service = AIService(config, mcp_manager=mcp_manager)
 
 @app.callback()
 def callback(

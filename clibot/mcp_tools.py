@@ -22,6 +22,30 @@ class MCPToolsManager:
         self.config = config
         self.processes = {}  # Cache for MCP server processes
         self._executor = ThreadPoolExecutor(max_workers=4)
+        
+        # Cache for tools and descriptions
+        self._tools_cache = {}  # server_name -> list of tools
+        self._descriptions_cache = {}  # server_name -> tool_descriptions
+        self._schema_cache = {}  # server_name:tool_name -> schema
+        
+        # Pre-initialize tools and descriptions for all servers if verbose mode is enabled
+        if self.config.verbose:
+            ui.print_verbose("=== Pre-initializing MCP Tools ===")
+            for server in self.config.list_mcp_servers():
+                self._preload_server_tools(server)
+            ui.print_verbose("=== MCP Tools Pre-initialization Complete ===")
+    
+    def _preload_server_tools(self, server_name: str) -> None:
+        """Preload tools and descriptions for a server to avoid redundant initializations."""
+        try:
+            # Only load if not already in cache
+            if server_name not in self._tools_cache:
+                self.list_available_tools(server_name)
+            if server_name not in self._descriptions_cache:
+                self.get_tool_descriptions(server_name)
+        except Exception as e:
+            if self.config.verbose:
+                ui.print_verbose(f"Error pre-initializing tools for {server_name}: {str(e)}")
     
     def _run_async(self, coro):
         """Run an async coroutine in a new event loop in a separate thread."""
@@ -144,6 +168,9 @@ class MCPToolsManager:
     
     def list_available_tools(self, server_name: str) -> List[str]:
         """List available tools for a specific MCP server."""
+        if server_name in self._tools_cache:
+            return self._tools_cache[server_name]
+        
         try:
             # Define the async operation
             async def operation(session):
@@ -180,6 +207,7 @@ class MCPToolsManager:
                 )
                 ui.print_verbose(msg)
             
+            self._tools_cache[server_name] = tool_names
             return tool_names
             
         except Exception as e:
@@ -212,6 +240,10 @@ class MCPToolsManager:
         self, server_name: str, tool_name: str
     ) -> Optional[Dict[str, Any]]:
         """Get the schema for a specific MCP tool."""
+        cache_key = f"{server_name}:{tool_name}"
+        if cache_key in self._schema_cache:
+            return self._schema_cache[cache_key]
+        
         try:
             # Define the async operation
             async def operation(session):
@@ -254,6 +286,7 @@ class MCPToolsManager:
             if tool:
                 if self.config.verbose:
                     ui.print_verbose("Retrieved schema for tool: %s" % tool_name)
+                self._schema_cache[cache_key] = tool
                 return tool
             
             if self.config.verbose:
@@ -269,6 +302,9 @@ class MCPToolsManager:
     
     def get_tool_descriptions(self, server_name: str) -> Dict[str, str]:
         """Get descriptions for all tools on a specific MCP server."""
+        if server_name in self._descriptions_cache:
+            return self._descriptions_cache[server_name]
+        
         try:
             # Define the async operation
             async def operation(session):
@@ -323,6 +359,7 @@ class MCPToolsManager:
                 )
                 ui.print_verbose(msg)
             
+            self._descriptions_cache[server_name] = descriptions
             return descriptions
             
         except Exception as e:
