@@ -71,7 +71,10 @@ class MCPToolsManager:
                     return result
         except Exception as e:
             if self.config.verbose:
-                ui.print_verbose(f"Error in _execute_with_session for server {server_name}: {str(e)}")
+                ui.print_verbose(
+                    f"Error in _execute_with_session for server {server_name}: "
+                    f"{str(e)}"
+                )
                 import traceback
                 ui.print_verbose(
                     f"Traceback: {traceback.format_exc()}"
@@ -80,49 +83,63 @@ class MCPToolsManager:
     
     def execute_mcp_command(
         self, server_name: str, tool_name: str, args: List[str] = None
-    ) -> Dict[str, Any]:
-        """Execute an MCP command on the specified server."""
-        try:
-            # Convert args list to kwargs dict if needed
-            kwargs = {}
+    ) -> Any:
+        """Execute an MCP command."""
+        if args is None:
+            args = []
+        
+        if self.config.verbose:
+            ui.print_verbose("Executing MCP command: %s.%s" % (server_name, tool_name))
             if args:
-                # If args is a list of strings, convert to a single JSON string
-                if len(args) == 1 and args[0].startswith('{') and args[0].endswith('}'):
-                    try:
-                        kwargs = json.loads(args[0])
-                    except json.JSONDecodeError:
-                        # If not valid JSON, treat each arg as a positional parameter
-                        for i, arg in enumerate(args):
-                            kwargs["arg%i" % (i+1)] = arg
-                else:
-                    # Convert positional args to kwargs based on position
-                    for i, arg in enumerate(args):
-                        kwargs["arg%i" % (i+1)] = arg
-            
-            if self.config.verbose:
-                ui.print_verbose("Executing MCP command: %s %s" % (server_name, tool_name))
-                if kwargs:
-                    ui.print_verbose("With kwargs: %s" % json.dumps(kwargs, indent=2))
-                elif args:
-                    ui.print_verbose("With args: %s" % args)
-            
+                ui.print_verbose("With arguments: %s" % args)
+        
+        try:
             # Define the async operation
             async def operation(session):
-                return await session.call_tool(tool_name, arguments=kwargs)
+                if self.config.verbose:
+                    ui.print_verbose(f"Calling tool for {tool_name} on {server_name}")
+                
+                # Convert args to a dictionary for the MCP SDK
+                params = {}
+                if args:
+                    # Parse args into a dictionary
+                    for arg in args:
+                        if "=" in arg:
+                            key, value = arg.split("=", 1)
+                            # Try to parse JSON values
+                            try:
+                                value = json.loads(value)
+                            except (json.JSONDecodeError, ValueError):
+                                # Keep as string if not valid JSON
+                                pass
+                            params[key] = value
+                
+                if self.config.verbose:
+                    ui.print_verbose(f"Executing with parameters: {params}")
+                
+                # Execute the command using call_tool method
+                result = await session.call_tool(tool_name, arguments=params)
+                
+                if self.config.verbose:
+                    ui.print_verbose(f"Command executed, result type: {type(result)}")
+                
+                # Return the raw result object
+                return result
             
             # Run the async operation in a new event loop
             result = self._run_async(self._execute_with_session(server_name, operation))
             
             if self.config.verbose:
                 ui.print_verbose("MCP command executed successfully")
-                result_size = len(json.dumps(result)) if result else 0
-                ui.print_verbose("Result size: %i characters" % result_size)
             
+            # Return the raw result
             return result
             
         except Exception as e:
             if self.config.verbose:
                 ui.print_verbose("Exception during MCP command execution: %s" % str(e))
+                import traceback
+                ui.print_verbose(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError("MCP error: %s" % str(e)) from e
     
     def list_available_tools(self, server_name: str) -> List[str]:
