@@ -1,9 +1,15 @@
 """UI components for CliBot."""
 
 import json
+import os
 import sys
 from typing import Any, List
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.history import FileHistory
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -15,6 +21,34 @@ console = Console()
 
 # Create a separate console for verbose output
 verbose_console = Console(stderr=True, style="dim")
+
+# Initialize prompt_toolkit session
+try:
+    # Use a more reliable path for the history file within the user's config directory
+    CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "clibot")
+    # Create config directory if it doesn't exist
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    HISTORY_FILE = os.path.join(CONFIG_DIR, "history")
+    
+    # Common commands for tab completion
+    command_completer = WordCompleter([
+        "exit", "quit", "help", "clear",
+        "list-servers", "list-tools", "run",
+        "git", "jira", "jenkins", "confluence"
+    ])
+    
+    # Create prompt session with history
+    prompt_session = PromptSession(
+        history=FileHistory(HISTORY_FILE),
+        auto_suggest=AutoSuggestFromHistory(),
+        enable_history_search=True,
+        completer=command_completer
+    )
+    
+    HAS_PROMPT_TOOLKIT = True
+except Exception as e:
+    verbose_console.print(f"[yellow]Warning: Error initializing prompt_toolkit: {e}[/yellow]")
+    HAS_PROMPT_TOOLKIT = False
 
 def print_welcome():
     """Print welcome message."""
@@ -66,9 +100,18 @@ def print_mcp_result(result: Any):
     console.print()
 
 def get_user_input() -> str:
-    """Get input from the user."""
+    """Get input from the user with history navigation and line editing."""
     try:
-        return console.input("[bold green]You:[/] ")
+        if HAS_PROMPT_TOOLKIT:
+            # Use prompt_toolkit with HTML formatting for the prompt
+            user_input = prompt_session.prompt(
+                HTML("<ansigreen><b>You:</b></ansigreen> ")
+            )
+        else:
+            # Fall back to console.input if prompt_toolkit is not available
+            user_input = console.input("[bold green]You:[/] ")
+            
+        return user_input
     except (KeyboardInterrupt, EOFError):
         console.print("\nExiting...")
         sys.exit(0)
